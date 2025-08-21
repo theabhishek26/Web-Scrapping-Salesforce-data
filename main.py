@@ -45,7 +45,7 @@ async def scrape_app_links(category_url: str, output_file="app_links.xlsx"):
                     results.append({
                         "App Name": name,
                         "Link": "https://appexchange.salesforce.com" + link,
-                        "Source Link": category_url
+                        
                     })
             except Exception as e:
                 print("Error extracting app:", e)
