@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import pandas as pd
 import asyncio
+import uuid
+
+BASE = "https://appexchange.salesforce.com"
 
 async def scrape_app_links(category_url: str, output_file="app_links.xlsx"):
     async with async_playwright() as pw:
@@ -13,52 +16,41 @@ async def scrape_app_links(category_url: str, output_file="app_links.xlsx"):
         # Keep clicking "Show More"
         while True:
             try:
-                btn = await page.query_selector(
-                    "wds-button[data-testid='view-more-button'] >> button"
-                )
+                btn = await page.query_selector("wds-button[data-testid='view-more-button'] >> button")
                 if not btn:
-                    print("No more 'Show More' button found.")
+                    print("✅ No more 'Show More' button found.")
                     break
                 await btn.scroll_into_view_if_needed()
                 await btn.click()
-                print("Clicked 'Show More'")
-                await asyncio.sleep(3)
+                print("➡️ Clicked 'Show More'")
+                await asyncio.sleep(2.5)
             except Exception as e:
-                print("Error clicking Show More:", e)
+                print("⚠️ Error clicking Show More:", e)
                 break
 
-        #  Extract app links & names
-        apps = await page.query_selector_all(
-            "wds-listing-card >> wds-analytics-instrument >> ax-card >> section >> div.title-creds"
-        )
+        # Extract all cards
+        cards = await page.query_selector_all("wds-listing-card a.card-target")
 
         results = []
-        for card in apps:
+        for card in cards:
             try:
-                link_el = await card.query_selector("a.card-target")
-                name_el = await card.query_selector("p[type-style='body-3']")
-                
-                link = await link_el.get_attribute("href") if link_el else None
-                name = (await name_el.inner_text()).strip() if name_el else "Unknown"
-                
+                name = (await card.inner_text()).strip()
+                link = await card.get_attribute("href")
                 if link:
                     results.append({
+                        "Unique ID": uuid.uuid4().hex[:12],  # 👉 IDs like "a26a13bfd714"
                         "App Name": name,
-                        "Link": "https://appexchange.salesforce.com" + link,
-                        
+                        "Link": BASE + link,
                     })
             except Exception as e:
-                print("Error extracting app:", e)
+                print("⚠️ Error extracting card:", e)
 
         await browser.close()
 
         # Deduplicate by Link
         df = pd.DataFrame(results).drop_duplicates(subset=["Link"]).reset_index(drop=True)
-        df.insert(0, "Unique ID", df.index + 1)
-
-        # Save to Excel
         df.to_excel(output_file, index=False)
-        print(f"Scraped {len(df)} unique apps and saved to {output_file}")
+        print(f"✅ Scraped {len(df)} unique apps and saved to {output_file}")
 
 
 async def main():
